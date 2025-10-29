@@ -1,0 +1,38 @@
+# WebAdmin sudoers configuration
+# Allows www-data user to run system commands without password
+
+# System service management
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload nginx
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart nginx
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload php8.3-fpm
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart php8.3-fpm
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload mysql
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart mysql
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload mariadb
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart mariadb
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload pdns
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart pdns
+
+# Nginx configuration testing
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
+
+# Certbot for SSL certificates
+www-data ALL=(ALL) NOPASSWD: /usr/bin/certbot certonly *
+www-data ALL=(ALL) NOPASSWD: /usr/bin/certbot renew *
+www-data ALL=(ALL) NOPASSWD: /usr/bin/certbot delete *
+
+# Backup operations - tar
+www-data ALL=(ALL) NOPASSWD: /bin/tar -czpf /websites/backups/* *
+www-data ALL=(ALL) NOPASSWD: /bin/tar -xzpf /websites/backups/* *
+
+# Backup operations - mysql
+www-data ALL=(ALL) NOPASSWD: /usr/bin/mysqldump *
+www-data ALL=(ALL) NOPASSWD: /usr/bin/mysql *
+
+# File operations for backups and restores
+www-data ALL=(ALL) NOPASSWD: /bin/cp -a /websites/* *
+www-data ALL=(ALL) NOPASSWD: /bin/rm -rf /websites/backups/.tmp_* *
+www-data ALL=(ALL) NOPASSWD: /bin/rm -rf /websites/* *
+www-data ALL=(ALL) NOPASSWD: /bin/mv /websites/* *
+www-data ALL=(ALL) NOPASSWD: /bin/mkdir -p /websites/*
+www-data ALL=(ALL) NOPASSWD: /bin/chown -R * /websites/*
