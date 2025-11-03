@@ -90,9 +90,7 @@ A comprehensive web-based control panel for managing Nginx websites, MySQL datab
 
 # Download and extract (adjust URL to your distribution method)
 
-## 📋 System Requirementscd /tmp
-
-# wget https://example.com/webadmin-installer.tar.gz
+## 📋 System Requirements
 
 - **Operating System**: Ubuntu 22.04 LTS or higher# tar -xzf webadmin-installer.tar.gz
 
