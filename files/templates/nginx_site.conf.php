@@ -5,7 +5,21 @@
 $serverNames = $data['server_names'] ?? [$data['server_name']];
 $primaryServer = $serverNames[0];
 $root = $data['root'];
+
+// Varnish settings
+$varnishEnabled = $data['varnish_enabled'] ?? false;
+$varnishBackendPort = $data['varnish_backend_port'] ?? 8080;
+$varnishListenPort = $data['varnish_listen_port'] ?? 80;
+
+// If Varnish is enabled, Nginx should listen on the backend port instead of 80
 $httpListen = $data['http_listen'] ?? ($data['listen_directives'] ?? ['80']);
+if ($varnishEnabled) {
+    // Replace 80 with backend port
+    $httpListen = array_map(function($port) use ($varnishBackendPort) {
+        return str_replace('80', (string)$varnishBackendPort, $port);
+    }, $httpListen);
+}
+
 $httpsListen = $data['https_listen'] ?? [];
 $httpsEnabled = !empty($data['https']);
 $activeListen = $httpsEnabled ? array_merge($httpListen, $httpsListen) : $httpListen;
@@ -79,6 +93,10 @@ fastcgi_cache_key <?= $fastcgiCacheKey ?>;
 
 <?php endif; ?>
 # Managed by webadmin panel
+<?php if ($varnishEnabled): ?>
+# Varnish cache is enabled - Nginx acts as backend on port <?= $varnishBackendPort ?>
+
+<?php endif; ?>
 <?php if ($httpsEnabled && $redirectHttp): ?>
 server {
 <?php foreach ($httpListen as $directive): ?>

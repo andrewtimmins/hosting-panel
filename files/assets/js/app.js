@@ -140,6 +140,12 @@ function switchView(targetId) {
         loadBackupHistory();
         loadBackupJobs();
         loadBackupDestinations();
+    } else if (targetId === 'ssl-view') {
+        loadSSLCertificates().catch(() => {});
+    } else if (targetId === 'cron-view') {
+        loadCronJobs().catch(() => {});
+    } else if (targetId === 'files-view') {
+        loadDirectory('/').catch(() => {});
     }
 }
 
@@ -747,12 +753,14 @@ async function createSite(formData) {
     }
 
     const https = formData.get('https') === '1';
+    const createDatabase = formData.get('create_database') === '1';
     const installWordPress = formData.get('install_wordpress') === '1';
     const installOpenCart = formData.get('install_opencart') === '1';
 
     const payload = {
         server_name: domain,
         https,
+        create_database: createDatabase,
         wordpress: { install: false },
         opencart: { install: false },
     };
@@ -827,9 +835,12 @@ async function createSite(formData) {
         successMessage = 'Site created and WordPress installed successfully';
     } else if (result?.opencart) {
         successMessage = 'Site created and OpenCart installed successfully';
+    } else if (result?.database) {
+        successMessage = `Site and database created successfully!\n\nDatabase: ${result.database.name}\nUser: ${result.database.user}\nPassword: ${result.database.password}\nHost: ${result.database.host}`;
     }
     
-    showNotification(successMessage, 'success');
+    showNotification(successMessage, 'success', result?.database ? 15000 : 5000);
+    
     await loadSites();
 
     return result;
@@ -1146,16 +1157,123 @@ serviceButtons.forEach((button) => {
 
 async function loadServiceHistory() {
     const history = await request('service_history');
-    serviceHistoryList.innerHTML = '';
-    history.forEach((item) => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <span>${item.command_label}</span>
-            <span>${item.status} · ${item.executed_at}</span>
-        `;
-        serviceHistoryList.appendChild(li);
+    if (history.length === 0) {
+        serviceHistoryList.textContent = 'No recent service actions.';
+    } else {
+        serviceHistoryList.textContent = history.map((item) => {
+            return `${item.command_label} ${item.status} · ${item.executed_at}`;
+        }).join('\n');
+    }
+}
+
+// Varnish Cache Management
+const refreshVarnishStatsBtn = document.getElementById('refresh-varnish-stats');
+const varnishPurgeUrlBtn = document.getElementById('varnish-purge-url-btn');
+const varnishPurgeAllBtn = document.getElementById('varnish-purge-all-btn');
+const varnishPurgeUrlInput = document.getElementById('varnish-purge-url');
+
+async function loadVarnishStats() {
+    try {
+        const stats = await request('get_varnish_stats');
+        
+        if (!stats.available) {
+            document.getElementById('varnish-hits').textContent = 'N/A';
+            document.getElementById('varnish-misses').textContent = 'N/A';
+            document.getElementById('varnish-hit-rate').textContent = 'N/A';
+            document.getElementById('varnish-objects').textContent = 'N/A';
+            return;
+        }
+        
+        document.getElementById('varnish-hits').textContent = stats.cache_hits.toLocaleString();
+        document.getElementById('varnish-misses').textContent = stats.cache_misses.toLocaleString();
+        document.getElementById('varnish-hit-rate').textContent = stats.hit_rate + '%';
+        document.getElementById('varnish-objects').textContent = stats.objects.toLocaleString();
+    } catch (error) {
+        console.error('Failed to load Varnish stats:', error);
+    }
+}
+
+if (refreshVarnishStatsBtn) {
+    refreshVarnishStatsBtn.addEventListener('click', async () => {
+        await loadVarnishStats();
+        showNotification('Varnish statistics refreshed', 'success');
     });
 }
+
+if (varnishPurgeUrlBtn) {
+    varnishPurgeUrlBtn.addEventListener('click', async () => {
+        const url = varnishPurgeUrlInput.value.trim();
+        if (!url) {
+            showNotification('Please enter a URL to purge', 'warning');
+            return;
+        }
+        
+        try {
+            const result = await request('purge_varnish_url', { url });
+            showNotification(result.message, 'success');
+            varnishPurgeUrlInput.value = '';
+            await loadVarnishStats();
+        } catch (error) {
+            // Error already shown by request function
+        }
+    });
+}
+
+if (varnishPurgeAllBtn) {
+    varnishPurgeAllBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to purge ALL cached content? This will clear the entire Varnish cache.')) {
+            return;
+        }
+        
+        try {
+            const result = await request('purge_varnish_all');
+            showNotification(result.message, 'success');
+            await loadVarnishStats();
+        } catch (error) {
+            // Error already shown by request function
+        }
+    });
+}
+
+// Tab switching for Services view
+const serviceTabs = document.querySelectorAll('.tabs .tab');
+const serviceTabPanels = document.querySelectorAll('.tab-panel');
+
+serviceTabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+        const targetPanel = tab.dataset.tab;
+        
+        // Update active tab
+        serviceTabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update active panel
+        serviceTabPanels.forEach((panel) => {
+            panel.classList.remove('active');
+            if (panel.id === targetPanel) {
+                panel.classList.add('active');
+            }
+        });
+        
+        // Load Varnish stats when Varnish Cache tab is opened
+        if (targetPanel === 'varnish-cache') {
+            loadVarnishStats().catch(() => {});
+        }
+    });
+});
+
+// Load Varnish stats when services view is first opened
+navButtons.forEach((button) => {
+    if (button.dataset.target === 'services-view') {
+        button.addEventListener('click', () => {
+            // Check if Varnish Cache tab is active
+            const varnishTab = document.querySelector('.tab[data-tab="varnish-cache"]');
+            if (varnishTab && varnishTab.classList.contains('active')) {
+                loadVarnishStats().catch(() => {});
+            }
+        });
+    }
+});
 
 // Cleanup when page unloads
 window.addEventListener('beforeunload', () => {
@@ -1488,6 +1606,9 @@ function setupConditionalSections() {
     const fastcgiCacheCheckbox = configForm.querySelector('#fastcgi-cache-checkbox');
     const fastcgiCacheConfig = document.querySelector('.fastcgi-cache-config');
     
+    const varnishCheckbox = configForm.querySelector('#varnish-enabled-checkbox');
+    const varnishConfig = document.querySelector('.varnish-config');
+    
     const browserCacheCheckbox = configForm.querySelector('#browser-cache-checkbox');
     const browserCacheConfig = document.querySelector('.browser-cache-config');
     
@@ -1514,6 +1635,11 @@ function setupConditionalSections() {
     if (fastcgiCacheCheckbox) {
         fastcgiCacheCheckbox.removeEventListener('change', handleFastcgiCacheToggle);
         fastcgiCacheCheckbox.addEventListener('change', handleFastcgiCacheToggle);
+    }
+    
+    if (varnishCheckbox) {
+        varnishCheckbox.removeEventListener('change', handleVarnishToggle);
+        varnishCheckbox.addEventListener('change', handleVarnishToggle);
     }
     
     if (browserCacheCheckbox) {
@@ -1547,6 +1673,12 @@ function setupConditionalSections() {
     function handleFastcgiCacheToggle() {
         if (fastcgiCacheConfig) {
             fastcgiCacheConfig.style.display = fastcgiCacheCheckbox.checked ? 'block' : 'none';
+        }
+    }
+    
+    function handleVarnishToggle() {
+        if (varnishConfig) {
+            varnishConfig.style.display = varnishCheckbox.checked ? 'block' : 'none';
         }
     }
     
@@ -4125,3 +4257,655 @@ function formatBytes(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+
+// ============================================================================
+// SSL CERTIFICATE MANAGEMENT
+// ============================================================================
+
+const sslCertsList = document.getElementById('ssl-certs-list');
+const openIssueCertBtn = document.getElementById('open-issue-cert');
+const issueCertModal = document.getElementById('issue-cert-modal');
+const issueCertForm = document.getElementById('issue-cert-form');
+
+async function loadSSLCertificates() {
+    try {
+        const certs = await request('list_ssl_certificates');
+        sslCertsList.innerHTML = '';
+
+        if (certs.length === 0) {
+            sslCertsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No SSL certificates found. Issue your first certificate to get started.</td></tr>';
+            return;
+        }
+
+        certs.forEach(cert => {
+            const row = document.createElement('tr');
+            
+            const statusClass = cert.status === 'active' ? 'success' : 
+                               cert.status === 'expired' ? 'danger' : 
+                               cert.status === 'pending' ? 'warning' : 'secondary';
+            
+            const daysClass = cert.days_until_expiry < 30 ? 'danger' : 
+                             cert.days_until_expiry < 60 ? 'warning' : 'success';
+            
+            row.innerHTML = `
+                <td>${cert.domain}</td>
+                <td><span class="badge badge-${statusClass}">${cert.status}</span></td>
+                <td>${cert.issued_at ? new Date(cert.issued_at).toLocaleDateString() : 'N/A'}</td>
+                <td>${cert.expires_at ? new Date(cert.expires_at).toLocaleDateString() : 'N/A'}</td>
+                <td><span class="badge badge-${daysClass}">${cert.days_until_expiry >= 0 ? cert.days_until_expiry : 'Expired'}</span></td>
+                <td>${cert.auto_renew ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-secondary">No</span>'}</td>
+                <td class="table-actions">
+                    ${cert.status === 'active' ? `<button class="secondary small" onclick="renewCertificate(${cert.id})">Renew</button>` : ''}
+                    <button class="danger small" onclick="deleteCertificate(${cert.id}, '${cert.domain}')">Delete</button>
+                </td>
+            `;
+            sslCertsList.appendChild(row);
+        });
+    } catch (error) {
+        showNotification('Failed to load SSL certificates: ' + error.message, 'error');
+    }
+}
+
+openIssueCertBtn?.addEventListener('click', () => {
+    issueCertForm.reset();
+    issueCertModal.showModal();
+});
+
+issueCertForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(issueCertForm);
+    const data = {
+        domain: formData.get('domain'),
+        email: formData.get('email'),
+        method: formData.get('method'),
+        additional_domains: formData.get('additional_domains') ? 
+            formData.get('additional_domains').split(',').map(d => d.trim()).filter(d => d) : [],
+        auto_renew: formData.get('auto_renew') === 'on'
+    };
+
+    try {
+        showNotification('Issuing SSL certificate...', 'info');
+        await request('issue_ssl_certificate', data);
+        showNotification('SSL certificate issued successfully!', 'success');
+        issueCertModal.close();
+        await loadSSLCertificates();
+    } catch (error) {
+        showNotification('Failed to issue certificate: ' + error.message, 'error');
+    }
+});
+
+async function renewCertificate(id) {
+    if (!confirm('Renew this SSL certificate?')) return;
+    
+    try {
+        showNotification('Renewing certificate...', 'info');
+        await request('renew_ssl_certificate', { id });
+        showNotification('Certificate renewed successfully!', 'success');
+        await loadSSLCertificates();
+    } catch (error) {
+        showNotification('Failed to renew certificate: ' + error.message, 'error');
+    }
+}
+
+async function deleteCertificate(id, domain) {
+    if (!confirm(`Delete SSL certificate for ${domain}? This will revoke the certificate.`)) return;
+    
+    try {
+        await request('delete_ssl_certificate', { id });
+        showNotification('Certificate deleted successfully', 'success');
+        await loadSSLCertificates();
+    } catch (error) {
+        showNotification('Failed to delete certificate: ' + error.message, 'error');
+    }
+}
+
+// ============================================================================
+// CRON JOB MANAGEMENT
+// ============================================================================
+
+const cronJobsList = document.getElementById('cron-jobs-list');
+const openCreateCronBtn = document.getElementById('open-create-cron');
+const createCronModal = document.getElementById('create-cron-modal');
+const cronJobForm = document.getElementById('cron-job-form');
+const cronSchedulePreset = document.getElementById('cron-schedule-preset');
+const cronScheduleInput = document.getElementById('cron-schedule');
+const cronSiteSelect = document.getElementById('cron-site');
+
+async function loadCronJobs() {
+    try {
+        const jobs = await request('list_cron_jobs');
+        cronJobsList.innerHTML = '';
+
+        if (jobs.length === 0) {
+            cronJobsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No cron jobs found. Create your first scheduled task.</td></tr>';
+            return;
+        }
+
+        jobs.forEach(job => {
+            const row = document.createElement('tr');
+            const statusClass = job.enabled ? 'success' : 'secondary';
+            
+            row.innerHTML = `
+                <td>
+                    <strong>${job.name}</strong>
+                    ${job.server_name ? `<br><span class="text-secondary text-sm">Site: ${job.server_name}</span>` : ''}
+                </td>
+                <td><code style="font-size: 0.85rem;">${job.command.length > 50 ? job.command.substring(0, 50) + '...' : job.command}</code></td>
+                <td><code>${job.schedule}</code></td>
+                <td>${job.next_run ? new Date(job.next_run).toLocaleString() : 'N/A'}</td>
+                <td>${job.last_run ? new Date(job.last_run).toLocaleString() : 'Never'}</td>
+                <td><span class="badge badge-${statusClass}">${job.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td class="table-actions">
+                    <button class="secondary small" onclick="toggleCronJob(${job.id}, ${!job.enabled})">${job.enabled ? 'Disable' : 'Enable'}</button>
+                    <button class="secondary small" onclick="executeCronJob(${job.id})">Run Now</button>
+                    <button class="secondary small" onclick="editCronJob(${job.id})">Edit</button>
+                    <button class="danger small" onclick="deleteCronJob(${job.id}, '${job.name}')">Delete</button>
+                </td>
+            `;
+            cronJobsList.appendChild(row);
+        });
+    } catch (error) {
+        showNotification('Failed to load cron jobs: ' + error.message, 'error');
+    }
+}
+
+// Populate site selector for cron jobs
+async function populateCronSiteSelect() {
+    try {
+        const sites = await request('list_sites');
+        cronSiteSelect.innerHTML = '<option value="">None (Global)</option>';
+        sites.forEach(site => {
+            const option = document.createElement('option');
+            option.value = site.server_name;
+            option.textContent = site.server_name;
+            cronSiteSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load sites for cron selector:', error);
+    }
+}
+
+// Schedule preset selector
+cronSchedulePreset?.addEventListener('change', (e) => {
+    if (e.target.value) {
+        cronScheduleInput.value = e.target.value;
+    }
+});
+
+openCreateCronBtn?.addEventListener('click', () => {
+    document.getElementById('cron-modal-title').textContent = 'Create Cron Job';
+    document.getElementById('cron-job-id').value = '';
+    cronJobForm.reset();
+    populateCronSiteSelect();
+    createCronModal.showModal();
+});
+
+cronJobForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(cronJobForm);
+    const jobId = document.getElementById('cron-job-id').value;
+    
+    const data = {
+        name: formData.get('name'),
+        command: formData.get('command'),
+        schedule: formData.get('schedule'),
+        user: formData.get('user'),
+        server_name: formData.get('server_name') || null,
+        enabled: formData.get('enabled') === 'on'
+    };
+
+    try {
+        if (jobId) {
+            data.id = parseInt(jobId);
+            await request('update_cron_job', data);
+            showNotification('Cron job updated successfully!', 'success');
+        } else {
+            await request('create_cron_job', data);
+            showNotification('Cron job created successfully!', 'success');
+        }
+        createCronModal.close();
+        await loadCronJobs();
+    } catch (error) {
+        showNotification('Failed to save cron job: ' + error.message, 'error');
+    }
+});
+
+async function editCronJob(id) {
+    try {
+        const job = await request('get_cron_job', { id });
+        document.getElementById('cron-modal-title').textContent = 'Edit Cron Job';
+        document.getElementById('cron-job-id').value = job.id;
+        document.getElementById('cron-name').value = job.name;
+        document.getElementById('cron-command').value = job.command;
+        document.getElementById('cron-schedule').value = job.schedule;
+        document.getElementById('cron-user').value = job.user;
+        document.getElementById('cron-enabled').checked = job.enabled;
+        
+        await populateCronSiteSelect();
+        if (job.server_name) {
+            document.getElementById('cron-site').value = job.server_name;
+        }
+        
+        createCronModal.showModal();
+    } catch (error) {
+        showNotification('Failed to load cron job: ' + error.message, 'error');
+    }
+}
+
+async function toggleCronJob(id, enabled) {
+    try {
+        await request('toggle_cron_job', { id, enabled });
+        showNotification(`Cron job ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        await loadCronJobs();
+    } catch (error) {
+        showNotification('Failed to toggle cron job: ' + error.message, 'error');
+    }
+}
+
+async function executeCronJob(id) {
+    if (!confirm('Execute this cron job now?')) return;
+    
+    try {
+        showNotification('Executing cron job...', 'info');
+        const result = await request('execute_cron_job', { id });
+        showNotification('Cron job executed. Check output in job list.', 'success');
+        await loadCronJobs();
+    } catch (error) {
+        showNotification('Failed to execute cron job: ' + error.message, 'error');
+    }
+}
+
+async function deleteCronJob(id, name) {
+    if (!confirm(`Delete cron job "${name}"?`)) return;
+    
+    try {
+        await request('delete_cron_job', { id });
+        showNotification('Cron job deleted successfully', 'success');
+        await loadCronJobs();
+    } catch (error) {
+        showNotification('Failed to delete cron job: ' + error.message, 'error');
+    }
+}
+
+// ============================================================================
+// PHP CONFIGURATION
+// ============================================================================
+
+const phpPresetSelector = document.getElementById('php-preset-selector');
+const phpVersionSelector = document.getElementById('php-version-selector');
+
+// Apply PHP preset
+phpPresetSelector?.addEventListener('change', async (e) => {
+    if (!e.target.value) return;
+    
+    try {
+        const presets = await request('get_php_presets');
+        const preset = presets[e.target.value];
+        
+        if (preset) {
+            document.getElementById('php-memory-limit').value = preset.php_memory_limit;
+            document.getElementById('php-upload-max-filesize').value = preset.php_upload_max_filesize;
+            document.getElementById('php-post-max-size').value = preset.php_post_max_size;
+            document.getElementById('php-max-execution-time').value = preset.php_max_execution_time;
+            document.getElementById('php-max-input-time').value = preset.php_max_input_time;
+            
+            showNotification(`Applied ${preset.label} preset`, 'success');
+        }
+    } catch (error) {
+        showNotification('Failed to load preset: ' + error.message, 'error');
+    }
+});
+
+// File Manager Functions
+let currentPath = '/';
+
+async function loadDirectory(path = '/') {
+    try {
+        const items = await request('list_directory', { path });
+        currentPath = path;
+        
+        // Update breadcrumb
+        updateBreadcrumb(path);
+        
+        // Render file list
+        const filesList = document.getElementById('files-list');
+        if (!filesList) return;
+        
+        filesList.innerHTML = '';
+        
+        // Add parent directory link if not at root
+        if (path !== '/') {
+            const parentPath = path.split('/').slice(0, -1).join('/') || '/';
+            filesList.innerHTML += `
+                <tr class="file-row file-type-directory" onclick="loadDirectory('${parentPath}')">
+                    <td class="file-name">
+                        <svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span class="file-name-text">..</span>
+                    </td>
+                    <td class="file-size">-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td></td>
+                </tr>
+            `;
+        }
+        
+        // Render items
+        items.forEach(item => {
+            const isDir = item.type === 'directory';
+            const icon = isDir 
+                ? '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'
+                : '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>';
+            
+            const onclick = isDir ? `loadDirectory('${item.path}')` : '';
+            const rowClass = isDir ? 'file-type-directory' : 'file-type-file';
+            
+            const modified = new Date(item.modified * 1000).toLocaleString();
+            const size = isDir ? '-' : formatFileSize(item.size);
+            const owner = item.owner ? `${item.owner}:${item.group}` : '-';
+            
+            // Check if file is editable (text-based)
+            const editableExtensions = ['txt', 'css', 'xml', 'json', 'php', 'js', 'html', 'htm', 'md', 'yml', 'yaml', 'conf', 'ini', 'log', 'sh', 'sql', 'env', 'htaccess', 'gitignore', 'py', 'rb', 'ts', 'jsx', 'tsx', 'vue', 'scss', 'less', 'svg'];
+            const extension = item.extension ? item.extension.toLowerCase() : '';
+            const isEditable = !isDir && editableExtensions.includes(extension);
+            
+            filesList.innerHTML += `
+                <tr class="file-row ${rowClass}" ${onclick ? `onclick="${onclick}"` : ''}>
+                    <td class="file-name">
+                        ${icon}
+                        <span class="file-name-text">${escapeHtml(item.name)}</span>
+                    </td>
+                    <td class="file-size">${size}</td>
+                    <td>${modified}</td>
+                    <td>${owner}</td>
+                    <td>${item.permissions}</td>
+                    <td class="file-actions" onclick="event.stopPropagation()">
+                        ${isEditable ? `<button class="secondary small" onclick="editFile('${item.path}')">Edit</button>` : ''}
+                        ${!isDir ? `<button class="secondary small" onclick="downloadFile('${item.path}')">Download</button>` : ''}
+                        ${isDir ? `<button class="secondary small" onclick="downloadZip('${item.path}')">Download Zip</button>` : ''}
+                        <button class="secondary small" onclick="renameItem('${item.path}', '${escapeHtml(item.name)}')">Rename</button>
+                        <button class="danger small" onclick="deleteItem('${item.path}', '${escapeHtml(item.name)}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        if (items.length === 0 && path === '/') {
+            filesList.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No files found</td></tr>';
+        }
+    } catch (error) {
+        showNotification('Failed to load directory: ' + error.message, 'error');
+    }
+}
+
+function updateBreadcrumb(path) {
+    const breadcrumb = document.getElementById('file-breadcrumb');
+    if (!breadcrumb) return;
+    
+    // Just display the path as text
+    breadcrumb.textContent = path || '/';
+}
+
+let aceEditor = null;
+
+async function editFile(path) {
+    try {
+        const file = await request('read_file', { path });
+        
+        // Get file extension
+        const extension = path.split('.').pop().toLowerCase();
+        
+        document.getElementById('file-edit-path').value = path;
+        document.getElementById('file-edit-path-display').value = path;
+        document.getElementById('file-edit-extension').value = extension;
+        document.getElementById('file-editor-title').textContent = `Edit: ${file.name}`;
+        document.getElementById('file-create-backup').checked = true;
+        
+        // Show modal first
+        document.getElementById('file-editor-modal').showModal();
+        
+        // Wait for modal to render, then initialize Ace
+        setTimeout(() => {
+            // Initialize Ace Editor if not already done
+            if (!aceEditor) {
+                try {
+                    aceEditor = ace.edit('ace-editor');
+                    aceEditor.setTheme('ace/theme/monokai');
+                    aceEditor.setOptions({
+                        fontSize: '14px',
+                        showPrintMargin: false,
+                        enableBasicAutocompletion: true,
+                        enableLiveAutocompletion: true,
+                        enableSnippets: true,
+                        tabSize: 4,
+                        useSoftTabs: true
+                    });
+                } catch (e) {
+                    console.error('Failed to initialize Ace Editor:', e);
+                    showNotification('Failed to initialize editor: ' + e.message, 'error');
+                    return;
+                }
+            }
+            
+            // Set syntax mode based on file extension
+            const modeMap = {
+                'php': 'php',
+                'js': 'javascript',
+                'json': 'json',
+                'html': 'html',
+                'htm': 'html',
+                'css': 'css',
+                'scss': 'scss',
+                'less': 'less',
+                'xml': 'xml',
+                'sql': 'sql',
+                'py': 'python',
+                'rb': 'ruby',
+                'sh': 'sh',
+                'yml': 'yaml',
+                'yaml': 'yaml',
+                'md': 'markdown',
+                'ts': 'typescript',
+                'jsx': 'jsx',
+                'tsx': 'tsx',
+                'vue': 'html'
+            };
+            
+            const mode = modeMap[extension] || 'text';
+            aceEditor.session.setMode(`ace/mode/${mode}`);
+            
+            // Set content
+            aceEditor.setValue(file.contents, -1); // -1 moves cursor to start
+            aceEditor.resize();
+            aceEditor.focus();
+        }, 100);
+        
+    } catch (error) {
+        showNotification('Failed to load file: ' + error.message, 'error');
+    }
+}
+
+function closeFileEditor() {
+    document.getElementById('file-editor-modal').close();
+    if (aceEditor) {
+        aceEditor.setValue('', -1);
+    }
+}
+
+async function saveFileContent(event) {
+    event.preventDefault();
+    
+    const path = document.getElementById('file-edit-path').value;
+    const contents = aceEditor ? aceEditor.getValue() : '';
+    const createBackup = document.getElementById('file-create-backup').checked;
+    
+    try {
+        // TODO: Implement backup creation
+        await request('write_file', { path, contents });
+        
+        showNotification('File saved successfully', 'success');
+        closeFileEditor();
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to save file: ' + error.message, 'error');
+    }
+}
+
+async function downloadFile(path) {
+    try {
+        window.location.href = `api.php?action=download_file&path=${encodeURIComponent(path)}`;
+    } catch (error) {
+        showNotification('Failed to download file: ' + error.message, 'error');
+    }
+}
+
+async function downloadZip(path) {
+    try {
+        window.location.href = `api.php?action=download_zip&path=${encodeURIComponent(path)}`;
+        showNotification('Creating zip archive...', 'info');
+    } catch (error) {
+        showNotification('Failed to create zip: ' + error.message, 'error');
+    }
+}
+
+async function deleteItem(path, name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+        return;
+    }
+    
+    try {
+        await request('delete_file', { path });
+        showNotification('Item deleted successfully', 'success');
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to delete item: ' + error.message, 'error');
+    }
+}
+
+async function renameItem(oldPath, currentName) {
+    const newName = prompt('Enter new name:', currentName);
+    if (!newName || newName === currentName) {
+        return;
+    }
+    
+    const directory = oldPath.substring(0, oldPath.lastIndexOf('/')) || '/';
+    const newPath = directory === '/' ? `/${newName}` : `${directory}/${newName}`;
+    
+    try {
+        await request('rename_file', { old_path: oldPath, new_path: newPath });
+        showNotification('Item renamed successfully', 'success');
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to rename item: ' + error.message, 'error');
+    }
+}
+
+function createNewFile() {
+    document.getElementById('new-file-name').value = '';
+    document.getElementById('create-file-modal').showModal();
+}
+
+function createNewFolder() {
+    document.getElementById('new-folder-name').value = '';
+    document.getElementById('create-folder-modal').showModal();
+}
+
+async function saveNewFile(event) {
+    event.preventDefault();
+    
+    const filename = document.getElementById('new-file-name').value;
+    const path = currentPath === '/' ? `/${filename}` : `${currentPath}/${filename}`;
+    
+    try {
+        await request('create_file', { path, contents: '' });
+        showNotification('File created successfully', 'success');
+        document.getElementById('create-file-modal').close();
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to create file: ' + error.message, 'error');
+    }
+}
+
+async function saveNewFolder(event) {
+    event.preventDefault();
+    
+    const foldername = document.getElementById('new-folder-name').value;
+    const path = currentPath === '/' ? `/${foldername}` : `${currentPath}/${foldername}`;
+    
+    try {
+        await request('create_directory', { path });
+        showNotification('Folder created successfully', 'success');
+        document.getElementById('create-folder-modal').close();
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to create folder: ' + error.message, 'error');
+    }
+}
+
+async function uploadFiles() {
+    const input = document.getElementById('file-upload-input');
+    const files = input.files;
+    
+    if (!files || files.length === 0) {
+        return;
+    }
+    
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const formData = new FormData();
+            formData.append('action', 'upload_file');
+            formData.append('path', currentPath);
+            formData.append('file', files[i]);
+            
+            const response = await fetch('api.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Upload failed');
+            }
+        }
+        
+        showNotification(`${files.length} file(s) uploaded successfully`, 'success');
+        input.value = '';
+        await loadDirectory(currentPath);
+    } catch (error) {
+        showNotification('Failed to upload files: ' + error.message, 'error');
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Make functions globally available
+window.renewCertificate = renewCertificate;
+window.deleteCertificate = deleteCertificate;
+window.editCronJob = editCronJob;
+window.toggleCronJob = toggleCronJob;
+window.executeCronJob = executeCronJob;
+window.deleteCronJob = deleteCronJob;
+window.loadDirectory = loadDirectory;
+window.editFile = editFile;
+window.closeFileEditor = closeFileEditor;
+window.saveFileContent = saveFileContent;
+window.downloadFile = downloadFile;
+window.downloadZip = downloadZip;
+window.deleteItem = deleteItem;
+window.renameItem = renameItem;
+window.createNewFile = createNewFile;
+window.createNewFolder = createNewFolder;
+window.saveNewFile = saveNewFile;
+window.saveNewFolder = saveNewFolder;
+window.uploadFiles = uploadFiles;

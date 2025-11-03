@@ -12,14 +12,26 @@ class SiteService
     private SettingsService $settingsService;
     private ?WordPressInstaller $wordpressInstaller;
     private ?OpenCartInstaller $opencartInstaller;
+    private ?DatabaseService $databaseService;
+    private ?SiteDatabaseService $siteDatabaseService;
 
-    public function __construct(array $config, NginxConfigService $nginxConfig, SettingsService $settingsService, ?WordPressInstaller $wordpressInstaller = null, ?OpenCartInstaller $opencartInstaller = null)
+    public function __construct(
+        array $config, 
+        NginxConfigService $nginxConfig, 
+        SettingsService $settingsService, 
+        ?WordPressInstaller $wordpressInstaller = null, 
+        ?OpenCartInstaller $opencartInstaller = null,
+        ?DatabaseService $databaseService = null,
+        ?SiteDatabaseService $siteDatabaseService = null
+    )
     {
         $this->db = Connection::get($config);
         $this->nginxConfig = $nginxConfig;
         $this->settingsService = $settingsService;
         $this->wordpressInstaller = $wordpressInstaller;
         $this->opencartInstaller = $opencartInstaller;
+        $this->databaseService = $databaseService;
+        $this->siteDatabaseService = $siteDatabaseService;
     }
 
     public function listSites(): array
@@ -48,6 +60,49 @@ class SiteService
 
         $site['wordpress'] = null;
         $site['opencart'] = null;
+        $site['database'] = null;
+
+        // Create database if requested
+        if (($data['create_database'] ?? false) === true) {
+            if (!$this->databaseService || !$this->siteDatabaseService) {
+                throw new RuntimeException('Database services not configured');
+            }
+
+            // Generate database name from server name (replace dots and hyphens with underscores)
+            $dbName = preg_replace('/[^a-zA-Z0-9_]/', '_', $data['server_name']);
+            $dbName = substr($dbName, 0, 64); // MySQL database name limit
+            
+            // Generate a secure random password for the database user
+            $dbPassword = bin2hex(random_bytes(16));
+            
+            try {
+                // Create the database
+                $database = $this->databaseService->createDatabase($dbName, 'utf8mb4', 'utf8mb4_unicode_ci');
+                
+                // Create a user for this database
+                $dbUser = $dbName; // Use same name as database for simplicity
+                $this->databaseService->createUser($dbUser, $dbPassword, 'localhost', $dbName);
+                
+                // Link the database to the site
+                $this->siteDatabaseService->linkDatabase(
+                    $data['server_name'],
+                    $dbName,
+                    $dbUser,
+                    'localhost',
+                    'Auto-created database for site'
+                );
+                
+                $site['database'] = [
+                    'name' => $dbName,
+                    'user' => $dbUser,
+                    'password' => $dbPassword,
+                    'host' => 'localhost'
+                ];
+            } catch (\Exception $e) {
+                error_log('Warning: Failed to create database for site: ' . $e->getMessage());
+                // Don't fail the site creation if database creation fails
+            }
+        }
         
         if (($data['wordpress']['install'] ?? false) === true) {
             if (!$this->wordpressInstaller) {

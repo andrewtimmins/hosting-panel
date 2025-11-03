@@ -498,6 +498,11 @@
 .log-controls .form-group {
     margin-bottom: 0;
     flex: 1;
+    min-width: 0;
+}
+
+.log-controls .form-group select {
+    min-width: 0;
 }
 
 .log-output {
@@ -664,44 +669,6 @@
 }
 
 /* Service History */
-.service-history {
-    margin-top: var(--spacing-6);
-}
-
-.service-history h3 {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text-primary);
-    margin-bottom: var(--spacing-4);
-}
-
-.service-history ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.service-history li {
-    padding: var(--spacing-3) var(--spacing-4);
-    background: var(--surface-primary);
-    border: 1px solid var(--border-secondary);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-2);
-    font-size: var(--font-size-sm);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.service-history li:last-child {
-    margin-bottom: 0;
-}
-
-.service-history .timestamp {
-    font-size: var(--font-size-xs);
-    color: var(--text-tertiary);
-}
-
 /* ========================================
    SUMMARY INFO
    ======================================== */

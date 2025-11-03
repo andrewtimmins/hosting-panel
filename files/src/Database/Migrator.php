@@ -18,6 +18,10 @@ class Migrator
         $this->createActionsLogTable();
         $this->createSiteConfigurationsTable();
         $this->addExtendedConfigFields();
+        $this->addVarnishFieldsToSiteConfigurations();
+        $this->addPhpConfigToSiteConfigurations();
+        $this->createSslCertificatesTable();
+        $this->createCronJobsTable();
         $this->createSettingsTable();
         $this->createUsersTable();
         $this->createUserSessionsTable();
@@ -74,6 +78,30 @@ SQL;
     private function addExtendedConfigFields(): void
     {
         $migration = new \App\Database\Migrations\AddExtendedConfigFieldsToSiteConfigurations();
+        $migration->up($this->db);
+    }
+
+    private function addVarnishFieldsToSiteConfigurations(): void
+    {
+        $migration = new \App\Database\Migrations\AddVarnishFieldsToSiteConfigurations();
+        $migration->up($this->db);
+    }
+
+    private function addPhpConfigToSiteConfigurations(): void
+    {
+        $migration = new \App\Database\Migrations\AddPhpConfigToSiteConfigurations();
+        $migration->up($this->db);
+    }
+
+    private function createSslCertificatesTable(): void
+    {
+        $migration = new \App\Database\Migrations\CreateSslCertificatesTable();
+        $migration->up($this->db);
+    }
+
+    private function createCronJobsTable(): void
+    {
+        $migration = new \App\Database\Migrations\CreateCronJobsTable();
         $migration->up($this->db);
     }
 

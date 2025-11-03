@@ -41,10 +41,11 @@ try {
     $allowedCommands = $config['security']['allowed_commands'] ?? [];
     $nginxService = new NginxConfigService($paths, $siteDefaults, $allowedCommands);
     $settingsService = new SettingsService($mysqlConfig, $config['wordpress'] ?? [], $config['opencart'] ?? []);
+    $databaseService = new DatabaseService($mysqlConfig);
     $siteDatabaseService = new App\Services\SiteDatabaseService($mysqlConfig);
     $wordpressInstaller = new WordPressInstaller($mysqlConfig, $siteDatabaseService);
     $opencartInstaller = new OpenCartInstaller($mysqlConfig, $siteDatabaseService);
-    $siteService = new SiteService($mysqlConfig, $nginxService, $settingsService, $wordpressInstaller, $opencartInstaller);
+    $siteService = new SiteService($mysqlConfig, $nginxService, $settingsService, $wordpressInstaller, $opencartInstaller, $databaseService, $siteDatabaseService);
 
     $allowedLogs = $config['security']['allowed_log_files'];
     $logService = new LogService($allowedLogs);
@@ -54,7 +55,14 @@ try {
     $certbotService = new App\Services\CertbotService($allowedCommands);
     $configService = new App\Services\SiteConfigurationService($mysqlConfig, $nginxService, $certbotService);
     $dnsService = new PowerDNSService($mysqlConfig);
-    $databaseService = new DatabaseService($mysqlConfig);
+    
+    // SSL, Cron, PHP services
+    $sslService = new App\Services\SslCertificateService($db, $certbotService);
+    $cronService = new App\Services\CronJobService($db);
+    $phpConfigService = new App\Services\PhpConfigService($db);
+    
+    // File Manager service
+    $fileManagerService = new App\Services\FileManagerService($paths['sites_dir'] ?? '/websites');
     
     // Backup services
     $backupDestinationService = new App\Services\BackupDestinationService($mysqlConfig);
@@ -207,6 +215,63 @@ try {
         'get_service_status' => getServiceStatus($config),
         'get_system_stats' => getSystemStats(),
         
+        // Varnish cache management endpoints
+        'get_varnish_stats' => getVarnishStats(),
+        'purge_varnish_url' => purgeVarnishUrl(requiredString($payload, 'url')),
+        'purge_varnish_all' => purgeVarnishAll(),
+        
+        // SSL Certificate endpoints
+        'list_ssl_certificates' => $sslService->listCertificates(),
+        'get_ssl_certificate' => $sslService->getCertificate((int) requiredString($payload, 'id')),
+        'issue_ssl_certificate' => $sslService->issueCertificate(
+            requiredString($payload, 'domain'),
+            requiredString($payload, 'email'),
+            $payload['method'] ?? 'webroot',
+            $payload['additional_domains'] ?? [],
+            $payload['auto_renew'] ?? true
+        ),
+        'renew_ssl_certificate' => $sslService->renewCertificate((int) requiredString($payload, 'id')),
+        'delete_ssl_certificate' => tap(null, fn () => $sslService->deleteCertificate((int) requiredString($payload, 'id'))),
+        'revoke_ssl_certificate' => tap(null, fn () => $sslService->revokeCertificate((int) requiredString($payload, 'id'))),
+        'auto_renew_ssl_certificates' => $sslService->autoRenewCertificates(),
+        
+        // Cron Job endpoints
+        'list_cron_jobs' => $cronService->listJobs($payload['server_name'] ?? null),
+        'get_cron_job' => $cronService->getJob((int) requiredString($payload, 'id')),
+        'create_cron_job' => $cronService->createJob(
+            requiredString($payload, 'name'),
+            requiredString($payload, 'command'),
+            requiredString($payload, 'schedule'),
+            $payload['user'] ?? 'www-data',
+            $payload['server_name'] ?? null,
+            $payload['enabled'] ?? true
+        ),
+        'update_cron_job' => $cronService->updateJob((int) requiredString($payload, 'id'), $payload),
+        'delete_cron_job' => tap(null, fn () => $cronService->deleteJob((int) requiredString($payload, 'id'))),
+        'toggle_cron_job' => $cronService->toggleJob((int) requiredString($payload, 'id'), $payload['enabled'] ?? true),
+        'execute_cron_job' => $cronService->executeJob((int) requiredString($payload, 'id')),
+        'get_cron_schedule_presets' => $cronService->getSchedulePresets(),
+        
+        // PHP Configuration endpoints
+        'get_php_config' => $phpConfigService->getConfig(requiredString($payload, 'server_name')),
+        'update_php_config' => $phpConfigService->updateConfig(requiredString($payload, 'server_name'), $payload),
+        'get_php_versions' => $phpConfigService->getAvailableVersions(),
+        'get_php_presets' => $phpConfigService->getPresets(),
+        
+        // File Manager endpoints
+        'list_directory' => $fileManagerService->listDirectory($payload['path'] ?? '/'),
+        'read_file' => $fileManagerService->readFile(requiredString($payload, 'path')),
+        'write_file' => $fileManagerService->writeFile(requiredString($payload, 'path'), requiredString($payload, 'contents')),
+        'create_file' => $fileManagerService->createFile(requiredString($payload, 'path'), $payload['contents'] ?? ''),
+        'create_directory' => $fileManagerService->createDirectory(requiredString($payload, 'path')),
+        'delete_file' => $fileManagerService->delete(requiredString($payload, 'path')),
+        'rename_file' => $fileManagerService->rename(requiredString($payload, 'old_path'), requiredString($payload, 'new_path')),
+        'upload_file' => handleFileUpload($fileManagerService, $payload),
+        'download_file' => handleFileDownload($fileManagerService, $payload),
+        'download_zip' => handleZipDownload($fileManagerService, $payload),
+        'chmod_file' => $fileManagerService->chmod(requiredString($payload, 'path'), requiredString($payload, 'permissions')),
+        'search_files' => $fileManagerService->search($payload['directory'] ?? '/', requiredString($payload, 'query'), $payload['case_sensitive'] ?? false),
+        
         // Authentication endpoints
         'login' => handleLogin($config['mysql'], $payload),
         'logout' => handleLogout($config['mysql']),
@@ -264,6 +329,7 @@ function validateCreateSitePayload(array $payload): array
 {
     $serverName = requiredString($payload, 'server_name');
     $https = (bool) ($payload['https'] ?? false);
+    $createDatabase = (bool) ($payload['create_database'] ?? false);
     $wordpress = $payload['wordpress'] ?? [];
 
     if (!preg_match('/^[a-z0-9.-]+$/', $serverName)) {
@@ -281,6 +347,7 @@ function validateCreateSitePayload(array $payload): array
     return [
         'server_name' => strtolower($serverName),
         'https' => $https,
+        'create_database' => $createDatabase,
         'wordpress' => validateWordPressInstallPayload($wordpress),
         'opencart' => validateOpenCartInstallPayload($payload['opencart'] ?? []),
     ];
@@ -470,7 +537,8 @@ function getServiceStatus(array $config): array
         'nginx' => 'nginx',
         'php' => $config['paths']['php_fpm_service'] ?? 'php8.3-fpm',
         'mysql' => 'mysql',
-        'powerdns' => 'pdns'
+        'powerdns' => 'pdns',
+        'varnish' => $config['paths']['varnish_service'] ?? 'varnish'
     ];
     
     $status = [];
@@ -752,4 +820,179 @@ function handleSetupAdmin(array $dbConfig, array $payload): array
     ];
     
     return $userService->createUser($adminData);
+}
+
+// Varnish Cache Management Functions
+function getVarnishStats(): array
+{
+    $stats = [
+        'cache_hits' => 0,
+        'cache_misses' => 0,
+        'hit_rate' => 0,
+        'objects' => 0,
+        'available' => false
+    ];
+    
+    // Check if varnishstat is available
+    exec('which varnishstat 2>/dev/null', $output, $returnCode);
+    if ($returnCode !== 0) {
+        return $stats;
+    }
+    
+    $stats['available'] = true;
+    
+    // Get Varnish statistics using varnishstat
+    exec('varnishstat -1 -f MAIN.cache_hit,MAIN.cache_miss,MAIN.n_object 2>/dev/null', $output, $returnCode);
+    
+    if ($returnCode === 0 && !empty($output)) {
+        foreach ($output as $line) {
+            if (preg_match('/MAIN\.cache_hit\s+(\d+)/', $line, $matches)) {
+                $stats['cache_hits'] = (int)$matches[1];
+            } elseif (preg_match('/MAIN\.cache_miss\s+(\d+)/', $line, $matches)) {
+                $stats['cache_misses'] = (int)$matches[1];
+            } elseif (preg_match('/MAIN\.n_object\s+(\d+)/', $line, $matches)) {
+                $stats['objects'] = (int)$matches[1];
+            }
+        }
+        
+        // Calculate hit rate
+        $total = $stats['cache_hits'] + $stats['cache_misses'];
+        if ($total > 0) {
+            $stats['hit_rate'] = round(($stats['cache_hits'] / $total) * 100, 2);
+        }
+    }
+    
+    return $stats;
+}
+
+function purgeVarnishUrl(string $url): array
+{
+    // Validate URL format
+    $url = trim($url);
+    if (empty($url)) {
+        throw new InvalidArgumentException('URL is required');
+    }
+    
+    // If URL doesn't start with /, add it
+    if (!str_starts_with($url, '/')) {
+        $url = '/' . $url;
+    }
+    
+    // Execute PURGE request to Varnish
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'http://localhost' . $url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PURGE');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_NOBODY, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        return [
+            'success' => true,
+            'message' => "Cache purged for URL: {$url}",
+            'url' => $url
+        ];
+    } elseif ($httpCode === 404) {
+        return [
+            'success' => false,
+            'message' => "URL not found in cache: {$url}",
+            'url' => $url
+        ];
+    } else {
+        throw new RuntimeException("Failed to purge cache. HTTP code: {$httpCode}");
+    }
+}
+
+function purgeVarnishAll(): array
+{
+    // Purge all cache by banning everything
+    // This uses the ban command which is more efficient than purging individual items
+    
+    // Method 1: Use varnishadm to ban all objects
+    exec('sudo varnishadm "ban req.url ~ ." 2>&1', $output, $returnCode);
+    
+    if ($returnCode === 0) {
+        return [
+            'success' => true,
+            'message' => 'All cache purged successfully'
+        ];
+    }
+    
+    // Method 2: Fallback - use PURGE with wildcard pattern
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'http://localhost/.*');
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PURGE');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        return [
+            'success' => true,
+            'message' => 'All cache purged successfully'
+        ];
+    }
+    
+    throw new RuntimeException('Failed to purge all cache. Ensure Varnish is running and varnishadm is accessible.');
+}
+
+function handleFileUpload(App\Services\FileManagerService $fileManager, array $payload): array
+{
+    $targetPath = $payload['path'] ?? '/';
+    
+    if (empty($_FILES['file'])) {
+        throw new InvalidArgumentException('No file uploaded');
+    }
+    
+    return $fileManager->uploadFile($targetPath, $_FILES['file']);
+}
+
+function handleFileDownload(App\Services\FileManagerService $fileManager, array $payload): never
+{
+    $path = $payload['path'] ?? null;
+    if (!$path) {
+        throw new InvalidArgumentException('File path is required');
+    }
+    
+    $fullPath = $fileManager->getDownloadPath($path);
+    $filename = basename($fullPath);
+    $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+    
+    header('Content-Type: ' . $mimeType);
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . filesize($fullPath));
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    readfile($fullPath);
+    exit;
+}
+
+function handleZipDownload(App\Services\FileManagerService $fileManager, array $payload): never
+{
+    $path = $payload['path'] ?? null;
+    if (!$path) {
+        throw new InvalidArgumentException('File path is required');
+    }
+    
+    $zipInfo = $fileManager->createZip($path);
+    
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . $zipInfo['zip_name'] . '"');
+    header('Content-Length: ' . $zipInfo['size']);
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    readfile($zipInfo['zip_path']);
+    
+    // Clean up temp file
+    unlink($zipInfo['zip_path']);
+    
+    exit;
 }

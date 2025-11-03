@@ -55,6 +55,10 @@ if ($config['features']['enable_auth'] ?? false) {
                         <span class="status-dot status-unknown"></span>
                         <span class="status-label">PowerDNS</span>
                     </div>
+                    <div class="service-status" data-service="varnish">
+                        <span class="status-dot status-unknown"></span>
+                        <span class="status-label">Varnish</span>
+                    </div>
                 </div>
             </div>
             
@@ -172,6 +176,27 @@ if ($config['features']['enable_auth'] ?? false) {
                         <line x1="12" y1="22.08" x2="12" y2="12"></line>
                     </svg>
                     <span class="nav-text">Backups</span>
+                </button>
+                <button class="nav-button" data-target="cron-view">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span class="nav-text">Cron Jobs</span>
+                </button>
+                <button class="nav-button" data-target="ssl-view">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span class="nav-text">SSL Certificates</span>
+                </button>
+                <button class="nav-button" data-target="files-view">
+                    <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <span class="nav-text">File Manager</span>
                 </button>
                 <button class="nav-button" data-target="settings-view">
                     <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -432,47 +457,211 @@ if ($config['features']['enable_auth'] ?? false) {
 
             <section id="services-view" class="view">
                 <div class="view-header">
-                    <h2>Service Control</h2>
+                    <h2>Services</h2>
                 </div>
-                <div class="service-grid">
-                    <div class="service-card">
-                        <h3>NGINX</h3>
-                        <p class="text-secondary text-sm">Web server control</p>
-                        <div class="actions service-actions">
-                            <button data-command="nginx_reload" class="secondary">Reload</button>
-                            <button data-command="nginx_restart" class="danger">Restart</button>
+                
+                <div class="tabs">
+                    <button class="tab active" data-tab="service-control">Service Control</button>
+                    <button class="tab" data-tab="varnish-cache">Varnish Cache</button>
+                    <button class="tab" data-tab="service-history-tab">Recent Actions</button>
+                </div>
+                
+                <div id="service-control" class="tab-panel active">
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>NGINX</h3>
+                            <p class="text-secondary text-sm">Web server control</p>
+                            <div class="actions service-actions">
+                                <button data-command="nginx_reload" class="secondary">Reload</button>
+                                <button data-command="nginx_restart" class="danger">Restart</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="service-card">
-                        <h3>PHP-FPM</h3>
-                        <p class="text-secondary text-sm">PHP processor control</p>
-                        <div class="actions service-actions">
-                            <button data-command="php_fpm_reload" class="secondary">Reload</button>
-                            <button data-command="php_fpm_restart" class="danger">Restart</button>
+                        <div class="service-card">
+                            <h3>PHP-FPM</h3>
+                            <p class="text-secondary text-sm">PHP processor control</p>
+                            <div class="actions service-actions">
+                                <button data-command="php_fpm_reload" class="secondary">Reload</button>
+                                <button data-command="php_fpm_restart" class="danger">Restart</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="service-card">
-                        <h3>MySQL</h3>
-                        <p class="text-secondary text-sm">Database server control</p>
-                        <div class="actions service-actions">
-                            <button data-command="mysql_reload" class="secondary">Reload</button>
-                            <button data-command="mysql_restart" class="danger">Restart</button>
+                        <div class="service-card">
+                            <h3>MySQL</h3>
+                            <p class="text-secondary text-sm">Database server control</p>
+                            <div class="actions service-actions">
+                                <button data-command="mysql_reload" class="secondary">Reload</button>
+                                <button data-command="mysql_restart" class="danger">Restart</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="service-card">
-                        <h3>PowerDNS</h3>
-                        <p class="text-secondary text-sm">Authoritative DNS control</p>
-                        <div class="actions service-actions">
-                            <button data-command="powerdns_reload" class="secondary">Reload</button>
-                            <button data-command="powerdns_restart" class="danger">Restart</button>
+                        <div class="service-card">
+                            <h3>PowerDNS</h3>
+                            <p class="text-secondary text-sm">Authoritative DNS control</p>
+                            <div class="actions service-actions">
+                                <button data-command="powerdns_reload" class="secondary">Reload</button>
+                                <button data-command="powerdns_restart" class="danger">Restart</button>
+                            </div>
+                        </div>
+                        <div class="service-card">
+                            <h3>Varnish</h3>
+                            <p class="text-secondary text-sm">HTTP cache control</p>
+                            <div class="actions service-actions">
+                                <button data-command="varnish_reload" class="secondary">Reload</button>
+                                <button data-command="varnish_restart" class="danger">Restart</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="service-history">
-                    <h3>Recent Actions</h3>
+                
+                <div id="varnish-cache" class="tab-panel">
                     <div class="card">
-                        <ul id="service-history"></ul>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Cache Statistics</label>
+                                <div id="varnish-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                                    <div class="stat-card">
+                                        <div class="stat-label">Cache Hits</div>
+                                        <div class="stat-value" id="varnish-hits">-</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-label">Cache Misses</div>
+                                        <div class="stat-value" id="varnish-misses">-</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-label">Hit Rate</div>
+                                        <div class="stat-value" id="varnish-hit-rate">-</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-label">Cached Objects</div>
+                                        <div class="stat-value" id="varnish-objects">-</div>
+                                    </div>
+                                </div>
+                                <button id="refresh-varnish-stats" class="secondary" style="margin-top: 1rem;">Refresh Stats</button>
+                            </div>
+                            
+                            <div class="form-group" style="margin-top: 2rem;">
+                                <label>Purge Cache</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
+                                    <input type="text" id="varnish-purge-url" placeholder="URL or pattern to purge (e.g., /page or .*\.css)" style="flex: 1; min-width: 200px;">
+                                    <button id="varnish-purge-url-btn" class="secondary">Purge URL</button>
+                                    <button id="varnish-purge-all-btn" class="danger">Purge All Cache</button>
+                                </div>
+                                <span class="form-help">Purge specific URLs or patterns from the Varnish cache</span>
+                            </div>
+                        </div>
                     </div>
+                </div>
+                
+                <div id="service-history-tab" class="tab-panel">
+                    <div class="card">
+                        <pre id="service-history" class="log-output"></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section id="cron-view" class="view">
+                <div class="view-header">
+                    <h2>Cron Jobs</h2>
+                    <button id="open-create-cron" class="primary">Add Cron Job</button>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Command</th>
+                                <th>Schedule</th>
+                                <th>Next Run</th>
+                                <th>Last Run</th>
+                                <th>Status</th>
+                                <th class="table-actions-column">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cron-jobs-list"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="ssl-view" class="view">
+                <div class="view-header">
+                    <h2>SSL Certificates</h2>
+                    <button id="open-issue-cert" class="primary">Issue Certificate</button>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Status</th>
+                                <th>Issued</th>
+                                <th>Expires</th>
+                                <th>Days Left</th>
+                                <th>Auto-Renew</th>
+                                <th class="table-actions-column">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ssl-certs-list"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="files-view" class="view">
+                <div class="view-header">
+                    <h2>File Manager</h2>
+                    <div class="view-actions">
+                        <button class="btn btn-secondary" onclick="createNewFile()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <line x1="9" y1="14" x2="15" y2="14"></line>
+                            </svg>
+                            New File
+                        </button>
+                        <button class="btn btn-secondary" onclick="createNewFolder()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <line x1="9" y1="14" x2="15" y2="14"></line>
+                            </svg>
+                            New Folder
+                        </button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('file-upload-input').click()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Upload
+                        </button>
+                        <input type="file" id="file-upload-input" multiple style="display: none" onchange="uploadFiles()">
+                    </div>
+                </div>
+                
+                <div class="file-path-header">
+                    <div class="file-path-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>Current Path:</span>
+                    </div>
+                    <div class="file-breadcrumb" id="file-breadcrumb"></div>
+                </div>
+                
+                <div class="card">
+                    <div class="file-list">
+                        <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Size</th>
+                                        <th>Modified</th>
+                                        <th>Owner</th>
+                                        <th>Permissions</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="files-list"></tbody>
+                            </table>
+                        </div>
                 </div>
             </section>
 
@@ -920,6 +1109,13 @@ if ($config['features']['enable_auth'] ?? false) {
                 </div>
                 <div class="form-group">
                     <label class="checkbox-label">
+                        <input type="checkbox" name="create_database" value="1" id="create-database-toggle">
+                        Create database automatically
+                    </label>
+                    <span class="form-help">Creates a MySQL database with the same name as the site and a dedicated user.</span>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
                         <input type="checkbox" name="install_wordpress" value="1" id="install-wordpress-toggle">
                         Install WordPress automatically
                     </label>
@@ -1210,10 +1406,68 @@ if ($config['features']['enable_auth'] ?? false) {
                 <!-- PHP Configuration -->
                 <div class="config-section" id="config-php">
                     <h3>PHP Configuration</h3>
+                    
+                    <div class="form-group">
+                        <label>Configuration Preset</label>
+                        <select id="php-preset-selector">
+                            <option value="">Custom</option>
+                            <option value="small">Small (Blog/Portfolio) - 128M memory</option>
+                            <option value="medium">Medium (Business Site) - 256M memory</option>
+                            <option value="large">Large (E-commerce) - 512M memory</option>
+                        </select>
+                        <span class="form-help">Quick-apply common PHP settings</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>PHP Version</label>
+                        <select id="php-version-selector" name="php_version">
+                            <option value="8.3">PHP 8.3</option>
+                            <option value="8.2">PHP 8.2</option>
+                            <option value="8.1">PHP 8.1</option>
+                            <option value="8.0">PHP 8.0</option>
+                            <option value="7.4">PHP 7.4</option>
+                        </select>
+                        <span class="form-help">PHP version for this site (generates dedicated FPM pool)</span>
+                    </div>
+                    
+                    <h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Memory & Execution</h4>
+                    
+                    <div class="form-group">
+                        <label>Memory Limit</label>
+                        <input type="text" id="php-memory-limit" name="php_memory_limit" placeholder="256M">
+                        <span class="form-help">Maximum memory a script can use (e.g., 128M, 256M, 512M)</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Max Execution Time</label>
+                        <input type="number" id="php-max-execution-time" name="php_max_execution_time" placeholder="300" min="1">
+                        <span class="form-help">Maximum time a script can run (seconds)</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Max Input Time</label>
+                        <input type="number" id="php-max-input-time" name="php_max_input_time" placeholder="300" min="1">
+                        <span class="form-help">Maximum time for parsing input data (seconds)</span>
+                    </div>
+                    
+                    <h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Upload & Post Limits</h4>
+                    
+                    <div class="form-group">
+                        <label>Upload Max Filesize</label>
+                        <input type="text" id="php-upload-max-filesize" name="php_upload_max_filesize" placeholder="64M">
+                        <span class="form-help">Maximum size of uploaded files (e.g., 16M, 64M, 128M)</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Post Max Size</label>
+                        <input type="text" id="php-post-max-size" name="php_post_max_size" placeholder="64M">
+                        <span class="form-help">Maximum size of POST data (should be >= upload_max_filesize)</span>
+                    </div>
+                    
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" name="php.php_enabled" id="php-enabled-checkbox">
-                            <span class="checkbox-text">Enable PHP Processing</span>
+                            <span class="checkbox-text">Enable PHP Processing (Legacy)</span>
                         </label>
                     </div>
                     <div class="php-config" id="php-config-section" style="display: none;">
@@ -1285,6 +1539,32 @@ if ($config['features']['enable_auth'] ?? false) {
                         <label>Client Body Buffer Size</label>
                         <input type="text" name="performance.client_body_buffer_size" placeholder="128k">
                         <span class="form-help">Buffer size for reading client request body</span>
+                    </div>
+                    
+                    <h4 style="margin-top: 1.5rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 600; color: var(--text-primary);">Varnish Cache (HTTP Accelerator)</h4>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="performance.varnish_enabled" id="varnish-enabled-checkbox">
+                            <span class="checkbox-text">Enable Varnish Cache</span>
+                        </label>
+                        <span class="form-help">Use Varnish as HTTP cache/accelerator in front of Nginx</span>
+                    </div>
+                    
+                    <div class="varnish-config" id="varnish-config-section" style="display: none;">
+                        <div class="form-group">
+                            <label>Varnish Listen Port</label>
+                            <input type="number" name="performance.varnish_listen_port" placeholder="80" min="1" max="65535">
+                            <span class="form-help">Port Varnish listens on (typically 80 for HTTP)</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Backend Port (Nginx)</label>
+                            <input type="number" name="performance.varnish_backend_port" placeholder="8080" min="1" max="65535">
+                            <span class="form-help">Port Nginx listens on as Varnish backend (typically 8080)</span>
+                        </div>
+                        <div class="alert alert-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--color-primary-50); border-left: 3px solid var(--color-primary-600); border-radius: 4px;">
+                            <strong>Note:</strong> When Varnish is enabled, Nginx will listen on the backend port and Varnish will handle public HTTP traffic. Make sure Varnish is installed and configured on your system.
+                        </div>
                     </div>
                     
                     <h4 style="margin-top: 1.5rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 600; color: var(--text-primary);">FastCGI Cache (PHP)</h4>
@@ -1833,6 +2113,211 @@ if ($config['features']['enable_auth'] ?? false) {
             opencartDefaults: <?= json_encode($config['opencart'] ?? [], JSON_THROW_ON_ERROR) ?>
         };
     </script>
+
+    <!-- Issue SSL Certificate Modal -->
+    <dialog id="issue-cert-modal" class="modal">
+        <div class="modal-header">
+            <h2>Issue SSL Certificate</h2>
+        </div>
+        <form id="issue-cert-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="cert-domain">Domain <span class="required">*</span></label>
+                    <input type="text" id="cert-domain" name="domain" required placeholder="example.com">
+                    <span class="form-help">Primary domain for the certificate</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cert-email">Email <span class="required">*</span></label>
+                    <input type="email" id="cert-email" name="email" required placeholder="admin@example.com">
+                    <span class="form-help">Email for certificate expiry notifications</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cert-method">Verification Method <span class="required">*</span></label>
+                    <select id="cert-method" name="method" required>
+                        <option value="webroot">Webroot (Recommended)</option>
+                        <option value="standalone">Standalone (Requires port 80 free)</option>
+                        <option value="nginx">Nginx Plugin</option>
+                    </select>
+                    <span class="form-help">How Let's Encrypt will verify domain ownership</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cert-additional-domains">Additional Domains (Optional)</label>
+                    <input type="text" id="cert-additional-domains" name="additional_domains" placeholder="www.example.com, blog.example.com">
+                    <span class="form-help">Comma-separated list of additional domains (SAN certificate)</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cert-auto-renew" name="auto_renew" checked>
+                        Enable automatic renewal
+                    </label>
+                    <span class="form-help">Automatically renew certificate 30 days before expiry</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
+                <button type="submit" class="primary">Issue Certificate</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Create Cron Job Modal -->
+    <dialog id="create-cron-modal" class="modal">
+        <div class="modal-header">
+            <h2 id="cron-modal-title">Create Cron Job</h2>
+        </div>
+        <form id="cron-job-form">
+            <input type="hidden" id="cron-job-id" name="id">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="cron-name">Name <span class="required">*</span></label>
+                    <input type="text" id="cron-name" name="name" required placeholder="Daily backup">
+                    <span class="form-help">Descriptive name for this cron job</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cron-command">Command <span class="required">*</span></label>
+                    <textarea id="cron-command" name="command" required placeholder="/usr/bin/php /path/to/script.php" rows="3"></textarea>
+                    <span class="form-help">Full command to execute (use absolute paths)</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cron-schedule-preset">Schedule Preset</label>
+                    <select id="cron-schedule-preset">
+                        <option value="">Custom...</option>
+                        <option value="* * * * *">Every Minute</option>
+                        <option value="*/5 * * * *">Every 5 Minutes</option>
+                        <option value="*/15 * * * *">Every 15 Minutes</option>
+                        <option value="*/30 * * * *">Every 30 Minutes</option>
+                        <option value="0 * * * *">Hourly</option>
+                        <option value="0 0 * * *">Daily at Midnight</option>
+                        <option value="0 12 * * *">Daily at Noon</option>
+                        <option value="0 0 * * 0">Weekly (Sunday)</option>
+                        <option value="0 0 1 * *">Monthly (1st)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="cron-schedule">Cron Expression <span class="required">*</span></label>
+                    <input type="text" id="cron-schedule" name="schedule" required placeholder="*/5 * * * *">
+                    <span class="form-help">Cron expression: minute hour day month weekday</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cron-user">Run As User</label>
+                    <select id="cron-user" name="user">
+                        <option value="www-data" selected>www-data</option>
+                        <option value="root">root</option>
+                        <option value="nobody">nobody</option>
+                    </select>
+                    <span class="form-help">System user to execute the command</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cron-site">Associated Website (Optional)</label>
+                    <select id="cron-site" name="server_name">
+                        <option value="">None (Global)</option>
+                    </select>
+                    <span class="form-help">Link this cron job to a specific website</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cron-enabled" name="enabled" checked>
+                        Enabled
+                    </label>
+                    <span class="form-help">Disable to temporarily pause execution</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
+                <button type="submit" class="primary">Save Cron Job</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- File Editor Modal -->
+    <dialog id="file-editor-modal" class="modal file-editor-modal">
+        <div class="modal-header">
+            <h2 id="file-editor-title">Edit File</h2>
+        </div>
+        <form id="file-editor-form" onsubmit="saveFileContent(event)">
+            <div class="modal-body">
+                <input type="hidden" id="file-edit-path" name="path">
+                <input type="hidden" id="file-edit-extension" name="extension">
+                
+                <div class="form-group">
+                    <label>File Path</label>
+                    <input type="text" id="file-edit-path-display" readonly style="background: var(--color-neutral-50); font-family: var(--font-family-mono);">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Contents</label>
+                    <div id="ace-editor" style="width: 100%; height: 500px; border: 1px solid var(--border-primary);"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="file-create-backup" checked>
+                        <span>Create backup before saving</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" onclick="closeFileEditor()">Cancel</button>
+                <button type="submit" class="primary">Save File</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Create File/Folder Modals -->
+    <dialog id="create-file-modal" class="modal">
+        <form id="create-file-form" onsubmit="saveNewFile(event)">
+            <div class="modal-header">
+                <h2>Create New File</h2>
+                <button type="button" class="close-button" onclick="this.closest('dialog').close()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-file-name">File Name</label>
+                    <input type="text" id="new-file-name" name="filename" required placeholder="example.php">
+                    <span class="form-help">Enter the file name with extension</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
+                <button type="submit" class="primary">Create File</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="create-folder-modal" class="modal">
+        <form id="create-folder-form" onsubmit="saveNewFolder(event)">
+            <div class="modal-header">
+                <h2>Create New Folder</h2>
+                <button type="button" class="close-button" onclick="this.closest('dialog').close()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-folder-name">Folder Name</label>
+                    <input type="text" id="new-folder-name" name="foldername" required placeholder="my-folder">
+                    <span class="form-help">Enter the folder name (no slashes)</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
+                <button type="submit" class="primary">Create Folder</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Ace Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.5/ace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.5/ext-language_tools.min.js"></script>
+    
     <script src="assets/js/app.js" type="module"></script>
     
     <!-- Notifications must be outside all dialogs to appear on top -->

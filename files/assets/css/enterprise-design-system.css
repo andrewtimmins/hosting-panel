@@ -609,6 +609,30 @@ code, kbd, pre {
     font-variant-numeric: tabular-nums;
 }
 
+.stat-card {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    text-align: center;
+}
+
+.stat-card .stat-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: var(--spacing-2);
+    display: block;
+}
+
+.stat-card .stat-value {
+    color: var(--text-primary);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    display: block;
+    font-variant-numeric: tabular-nums;
+}
+
 .network-indicator {
     display: flex;
     align-items: center;
@@ -1364,6 +1388,7 @@ input[type="search"],
 select,
 textarea {
     width: 100%;
+    max-width: 100%;
     height: var(--input-height-base);
     padding: var(--spacing-3) var(--spacing-4);
     font-family: inherit;
@@ -1374,6 +1399,7 @@ textarea {
     border-radius: var(--radius-lg);
     transition: all var(--transition-base);
     outline: none;
+    box-sizing: border-box;
 }
 
 textarea {
@@ -1425,6 +1451,15 @@ select {
     background-repeat: no-repeat;
     background-position: right var(--spacing-3) center;
     padding-right: var(--spacing-8);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+select option {
+    padding: var(--spacing-2) var(--spacing-3);
+    white-space: normal;
+    overflow-wrap: break-word;
 }
 
 /* Checkbox & Radio */
@@ -2088,5 +2123,119 @@ dialog menu {
     width: 64px;
     height: 64px;
     border-width: 5px;
+}
+
+/* File Manager Styles */
+.file-path-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+    padding: var(--spacing-5) var(--spacing-6);
+    background: linear-gradient(135deg, #1e3a8b 0%, #245ee3 100%);
+    border-radius: var(--radius-lg);
+    color: white;
+    box-shadow: var(--shadow-md);
+    margin-bottom: var(--spacing-6);
+}
+
+.file-path-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+
+.file-path-title svg {
+    flex-shrink: 0;
+    stroke: white;
+}
+
+.file-breadcrumb {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-mono);
+    color: #000000;
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    overflow-x: auto;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: rgb(255 255 255 / 94%);
+    border-radius: var(--radius-md);
+    letter-spacing: 0.5px;
+}
+
+.file-row {
+    cursor: pointer;
+    user-select: none;
+}
+
+.file-type-directory {
+    cursor: pointer !important;
+}
+
+.file-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: var(--spacing-2);
+    vertical-align: middle;
+}
+
+.file-name {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.file-name-text {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+}
+
+.file-type-directory .file-name-text {
+    font-weight: var(--font-weight-medium);
+    color: var(--color-primary-600);
+    cursor: pointer;
+}
+
+.file-size {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.file-actions {
+    display: flex;
+    gap: var(--spacing-2);
+    justify-content: flex-end;
+}
+
+.file-actions button {
+    padding: var(--spacing-2) var(--spacing-4);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+#file-upload-input {
+    display: none;
+}
+
+#file-editor-modal {
+    max-width: 90vw;
+    width: 1200px;
+    max-height: 95vh;
+}
+
+#file-editor-form {
+    height: 88vh;
+    min-height: 750px;
+}
+
+#ace-editor {
+    border-radius: var(--radius-md);
 }
 
